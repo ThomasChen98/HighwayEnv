@@ -26,6 +26,26 @@ def register_highway_envs():
         entry_point='highway_env.envs:HighwayEnvFast',
     )
 
+    register(
+        id='highway-basic-v0',
+        entry_point='highway_env.envs:HighwayEnvBasic',
+    )
+
+    register(
+        id='highway-addRightReward-v0',
+        entry_point='highway_env.envs:HighwayEnvAddRightReward',
+    )
+
+    register(
+        id='highway-pureRightReward-v0',
+        entry_point='highway_env.envs:HighwayEnvPureRightReward',
+    )
+
+    register(
+        id='highway-addLinearReward-v0',
+        entry_point='highway_env.envs:HighwayEnvMEAddLinearReward',
+    )
+
     # intersection_env.py
     register(
         id='intersection-v0',

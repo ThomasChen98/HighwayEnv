@@ -146,3 +146,201 @@ class HighwayEnvFast(HighwayEnv):
         for vehicle in self.road.vehicles:
             if vehicle not in self.controlled_vehicles:
                 vehicle.check_collisions = False
+
+class HighwayEnvBasic(HighwayEnv):
+    """
+    A variant of highway-v0 with faster execution:
+        - lower simulation frequency
+        - fewer vehicles in the scene (and fewer lanes, shorter episode duration)
+        - only check collision of controlled vehicles with others
+    """
+    @classmethod
+    def default_config(cls) -> dict:
+        cfg = super().default_config()
+        cfg.update({
+            "simulation_frequency": 5,
+            "lanes_count": 3,
+            "vehicles_count": 30,
+            "duration": 40,  # [s]
+            "ego_spacing": 1.5,
+            "collision_reward": -0.5,    # The reward received when colliding with a vehicle.
+            "right_lane_reward": 0.0,  # The reward received when driving on the right-most lanes, linearly mapped to
+                                       # zero for other lanes.
+            "high_speed_reward": 0.4,  # The reward received when driving at full speed, linearly mapped to zero for
+                                       # lower speeds according to config["reward_speed_range"].
+            "lane_change_reward": 0,   # The reward received at each lane change action.
+        })
+        return cfg
+    
+    def _reward(self, action: Action) -> float:
+        """
+        The reward is defined to foster driving at high speed, on the rightmost lanes, and to avoid collisions.
+        :param action: the last action performed
+        :return: the corresponding reward
+        """
+        neighbours = self.road.network.all_side_lanes(self.vehicle.lane_index)
+        lane = self.vehicle.target_lane_index[2] if isinstance(self.vehicle, ControlledVehicle) \
+            else self.vehicle.lane_index[2]
+        # Use forward speed rather than speed, see https://github.com/eleurent/highway-env/issues/268
+        forward_speed = self.vehicle.speed * np.cos(self.vehicle.heading)
+        scaled_speed = utils.lmap(forward_speed, self.config["reward_speed_range"], [0, 1])
+        reward = \
+            + self.config["collision_reward"] * self.vehicle.crashed \
+            + self.config["right_lane_reward"] * lane / max(len(neighbours) - 1, 1) \
+            + self.config["high_speed_reward"] * np.clip(scaled_speed, 0, 1) + 1
+        reward = 0 if not self.vehicle.on_road else reward
+        return reward
+
+class HighwayEnvAddRightReward(HighwayEnv):
+    """
+    A variant of highway-v0 with faster execution:
+        - lower simulation frequency
+        - fewer vehicles in the scene (and fewer lanes, shorter episode duration)
+        - only check collision of controlled vehicles with others
+    """
+    @classmethod
+    def default_config(cls) -> dict:
+        cfg = super().default_config()
+        cfg.update({
+            "simulation_frequency": 5,
+            "lanes_count": 3,
+            "vehicles_count": 30,
+            "duration": 40,  # [s]
+            "ego_spacing": 1.5,
+            "collision_reward": -0.5,  # The reward received when colliding with a vehicle.
+            "right_lane_reward": 0.5,  # The reward received when driving on the right-most lanes, linearly mapped to
+                                       # zero for other lanes.
+            "high_speed_reward": 0.4,  # The reward received when driving at full speed, linearly mapped to zero for
+                                       # lower speeds according to config["reward_speed_range"].
+            "lane_change_reward": 0,   # The reward received at each lane change action.
+        })
+        return cfg
+    
+    def _reward(self, action: Action) -> float:
+        """
+        The reward is defined to foster driving at high speed, on the rightmost lanes, and to avoid collisions.
+        :param action: the last action performed
+        :return: the corresponding reward
+        """
+        self.basic_reward = 0.0
+        self.added_reward = 0.0
+
+        neighbours = self.road.network.all_side_lanes(self.vehicle.lane_index)
+        lane = self.vehicle.target_lane_index[2] if isinstance(self.vehicle, ControlledVehicle) \
+            else self.vehicle.lane_index[2]
+        # Use forward speed rather than speed, see https://github.com/eleurent/highway-env/issues/268
+        forward_speed = self.vehicle.speed * np.cos(self.vehicle.heading)
+        scaled_speed = utils.lmap(forward_speed, self.config["reward_speed_range"], [0, 1])
+        reward = \
+            + self.config["collision_reward"] * self.vehicle.crashed \
+            + self.config["right_lane_reward"] * lane / max(len(neighbours) - 1, 1) \
+            + self.config["high_speed_reward"] * np.clip(scaled_speed, 0, 1)  + 1
+        reward = 0 if not self.vehicle.on_road else reward
+
+        self.basic_reward = \
+            + self.config["collision_reward"] * self.vehicle.crashed \
+            + self.config["high_speed_reward"] * np.clip(scaled_speed, 0, 1)  + 1
+        self.basic_reward = 0 if not self.vehicle.on_road else self.basic_reward
+
+        self.added_reward = self.config["right_lane_reward"] * lane / max(len(neighbours) - 1, 1)
+        self.added_reward = 0 if not self.vehicle.on_road else self.added_reward
+        return reward
+
+class HighwayEnvPureRightReward(HighwayEnv):
+    """
+    A variant of highway-v0 with faster execution:
+        - lower simulation frequency
+        - fewer vehicles in the scene (and fewer lanes, shorter episode duration)
+        - only check collision of controlled vehicles with others
+    """
+    @classmethod
+    def default_config(cls) -> dict:
+        cfg = super().default_config()
+        cfg.update({
+            "simulation_frequency": 5,
+            "lanes_count": 3,
+            "vehicles_count": 30,
+            "duration": 40,  # [s]
+            "ego_spacing": 1.5,
+            "collision_reward": 0.0,    # The reward received when colliding with a vehicle.
+            "right_lane_reward": 0.5,  # The reward received when driving on the right-most lanes, linearly mapped to
+                                       # zero for other lanes.
+            "high_speed_reward": 0.0,  # The reward received when driving at full speed, linearly mapped to zero for
+                                       # lower speeds according to config["reward_speed_range"].
+            "lane_change_reward": 0,   # The reward received at each lane change action.
+        })
+        return cfg
+    
+    def _reward(self, action: Action) -> float:
+        """
+        The reward is defined to foster driving at high speed, on the rightmost lanes, and to avoid collisions.
+        :param action: the last action performed
+        :return: the corresponding reward
+        """
+        neighbours = self.road.network.all_side_lanes(self.vehicle.lane_index)
+        lane = self.vehicle.target_lane_index[2] if isinstance(self.vehicle, ControlledVehicle) \
+            else self.vehicle.lane_index[2]
+        # Use forward speed rather than speed, see https://github.com/eleurent/highway-env/issues/268
+        forward_speed = self.vehicle.speed * np.cos(self.vehicle.heading)
+        scaled_speed = utils.lmap(forward_speed, self.config["reward_speed_range"], [0, 1])
+        reward = \
+            + self.config["collision_reward"] * self.vehicle.crashed \
+            + self.config["right_lane_reward"] * lane / max(len(neighbours) - 1, 1) \
+            + self.config["high_speed_reward"] * np.clip(scaled_speed, 0, 1)
+        reward = 0 if not self.vehicle.on_road else reward
+        return reward
+
+
+class HighwayEnvMEAddLinearReward(HighwayEnv):
+    """
+    A variant of highway-v0 with faster execution:
+        - lower simulation frequency
+        - fewer vehicles in the scene (and fewer lanes, shorter episode duration)
+        - only check collision of controlled vehicles with others
+    """
+    def __init__(self, config: dict = None, theta=[0., 0., 0.]) -> None:
+        super().__init__()
+        new_config = self.default_config()
+        new_config.update({
+            "collision_reward": theta[0],
+            "right_lane_reward": theta[1],
+            "high_speed_reward": theta[2],
+        })
+        self.config.update(new_config)
+
+    @classmethod
+    def default_config(cls) -> dict:
+        cfg = super().default_config()
+        cfg.update({
+            "simulation_frequency": 5,
+            "lanes_count": 3,
+            "vehicles_count": 30,
+            "duration": 40,  # [s]
+            "ego_spacing": 1.5,
+            "collision_reward": 0.0,  # The reward received when colliding with a vehicle.
+            "right_lane_reward": 0.5,  # The reward received when driving on the right-most lanes, linearly mapped to
+            # zero for other lanes.
+            "high_speed_reward": 0.0,  # The reward received when driving at full speed, linearly mapped to zero for
+            # lower speeds according to config["reward_speed_range"].
+            "lane_change_reward": 0,  # The reward received at each lane change action.
+        })
+        return cfg
+
+    def _reward(self, action: Action) -> float:
+        """
+        The reward is defined to foster driving at high speed, on the rightmost lanes, and to avoid collisions.
+        :param action: the last action performed
+        :return: the corresponding reward
+        """
+        neighbours = self.road.network.all_side_lanes(self.vehicle.lane_index)
+        lane = self.vehicle.target_lane_index[2] if isinstance(self.vehicle, ControlledVehicle) \
+            else self.vehicle.lane_index[2]
+        # Use forward speed rather than speed, see https://github.com/eleurent/highway-env/issues/268
+        forward_speed = self.vehicle.speed * np.cos(self.vehicle.heading)
+        scaled_speed = utils.lmap(forward_speed, self.config["reward_speed_range"], [0, 1])
+        reward = \
+            + self.config["collision_reward"] * self.vehicle.crashed \
+            + self.config["right_lane_reward"] * lane / max(len(neighbours) - 1, 1) \
+            + self.config["high_speed_reward"] * np.clip(scaled_speed, 0, 1)
+        reward = 0 if not self.vehicle.on_road else reward
+        return reward
