@@ -19,7 +19,7 @@ class EnvViewer(object):
     SAVE_IMAGES = False
     agent_display = None
 
-    def __init__(self, env: 'AbstractEnv', config: Optional[dict] = None) -> None:
+    def __init__(self, env: 'AbstractEnv', policy: str, config: Optional[dict] = None) -> None:
         self.env = env
         self.config = config or env.config
         self.offscreen = self.config["offscreen_rendering"]
@@ -28,6 +28,7 @@ class EnvViewer(object):
         self.vehicle_trajectory = None
         self.frame = 0
         self.directory = None
+        self.policy = policy
 
         pygame.init()
         pygame.display.set_caption("Highway-env")
@@ -48,6 +49,9 @@ class EnvViewer(object):
         self.enabled = True
         if os.environ.get("SDL_VIDEODRIVER", None) == "dummy":
             self.enabled = False
+    
+    def set_policy(self, policy: str) -> None:
+        self.policy = policy
 
     def set_agent_display(self, agent_display: Callable) -> None:
         """
@@ -127,10 +131,116 @@ class EnvViewer(object):
         RoadGraphics.display_traffic(
             self.env.road,
             self.sim_surface,
+            self.policy,
             simulation_frequency=self.env.config["simulation_frequency"],
             offscreen=self.offscreen)
 
         ObservationGraphics.display(self.env.observation_type, self.sim_surface)
+
+        if not self.offscreen:
+            self.screen.blit(self.sim_surface, (0, 0))
+            if self.env.config["real_time_rendering"]:
+                self.clock.tick(self.env.config["simulation_frequency"])
+            pygame.display.flip()
+
+        if self.SAVE_IMAGES and self.directory:
+            pygame.image.save(self.sim_surface, str(self.directory / "highway-env_{}.png".format(self.frame)))
+            self.frame += 1
+
+    def render_info_overlay(self, render_infos: dict):
+        pygame.font.init()
+        my_font = pygame.font.SysFont('arial', 25)
+
+        timestep_surface = my_font.render(f"Timestep: {render_infos['timestep']:d}", False, (0, 0, 0))
+        self.sim_surface.blit(timestep_surface, (2, 0))
+        episode_surface = my_font.render(f"Episode:  {render_infos['episode']:d}", False, (0, 0, 0))
+        self.sim_surface.blit(episode_surface, (2, 30))
+
+        forward_surface = my_font.render(f"Fwd Speed: {render_infos['forward speed']:.2f}", False, (0, 0, 0))
+        self.sim_surface.blit(forward_surface, (300, 0))
+        lateral_surface = my_font.render(f"Lat Speed:    {render_infos['lateral speed']:.2f}", False, (0, 0, 0))
+        self.sim_surface.blit(lateral_surface, (300, 30))
+        basic_surface = my_font.render(f"Basic Rwd:   {render_infos['basic reward']:.2f}", False, (0, 0, 0))
+        self.sim_surface.blit(basic_surface, (300, 60))
+        added_surface = my_font.render(f"Added Rwd: {render_infos['added reward']:.2f}", False, (0, 0, 0))
+        self.sim_surface.blit(added_surface, (300, 90))
+
+        takeover = render_infos['takeover']
+        change_flag = render_infos['change_flag']
+        policy_color = (0, 0, 0)
+        if not takeover:
+            policy_color = (50, 200, 0)
+            if not change_flag:  # prior no change
+                text_surface = my_font.render("Press 'Enter' to engage", False, (100, 200, 255))
+                self.sim_surface.blit(text_surface, (2, 300))
+            else: # human to prior
+                text_surface = my_font.render("Disengaged!", False, (255, 0, 0))
+                self.sim_surface.blit(text_surface, (2, 300))
+        else:
+            text_surface = my_font.render("Select actions", False, (0, 255, 0))
+            self.sim_surface.blit(text_surface, (2, 300))
+            text_surface = my_font.render("'Up' to FASTER", False, (0, 0, 0))
+            self.sim_surface.blit(text_surface, (300, 300))
+            text_surface = my_font.render("'Space' to IDLE", False, (0, 0, 0))
+            self.sim_surface.blit(text_surface, (300, 330))
+            text_surface = my_font.render("'Down' to SLOWER", False, (0, 0, 0))
+            self.sim_surface.blit(text_surface, (300, 360))
+            text_surface = my_font.render("'Left' to LANE_LEFT", False, (0, 0, 0))
+            self.sim_surface.blit(text_surface, (300, 390))
+            text_surface = my_font.render("'Right' to LANE_RIGHT", False, (0, 0, 0))
+            self.sim_surface.blit(text_surface, (300, 420))
+            text_surface = my_font.render("'Esc' to Disengage", False, (0, 0, 0))
+            self.sim_surface.blit(text_surface, (300, 450))
+            if change_flag: # prior to human
+                policy_color = (50, 200, 0)
+            else: # human no change
+                policy_color = (200, 200, 0)
+
+        policy_surface = my_font.render(f"Last Policy: {render_infos['policy']}", False, policy_color)
+        self.sim_surface.blit(policy_surface, (2, 60))
+        action_surface = my_font.render(f"Last Action: {render_infos['action']}", False, policy_color)
+        self.sim_surface.blit(action_surface, (2, 90))
+
+    def display_info(self, render_infos: dict) -> None:
+        """Display the road and vehicles on a pygame window with info overlay."""
+        if not self.enabled:
+            return
+
+        self.sim_surface.move_display_window_to(self.window_position())
+        RoadGraphics.display(self.env.road, self.sim_surface)
+
+        if self.vehicle_trajectory:
+            VehicleGraphics.display_trajectory(
+                self.vehicle_trajectory,
+                self.sim_surface,
+                offscreen=self.offscreen)
+
+        RoadGraphics.display_road_objects(
+            self.env.road,
+            self.sim_surface,
+            offscreen=self.offscreen
+        )
+
+        if self.agent_display:
+            self.agent_display(self.agent_surface, self.sim_surface)
+            if not self.offscreen:
+                if self.config["screen_width"] > self.config["screen_height"]:
+                    self.screen.blit(self.agent_surface, (0, self.config["screen_height"]))
+                else:
+                    self.screen.blit(self.agent_surface, (self.config["screen_width"], 0))
+
+        RoadGraphics.display_traffic(
+            self.env.road,
+            self.sim_surface,
+            self.policy,
+            simulation_frequency=self.env.config["simulation_frequency"],
+            offscreen=self.offscreen)
+
+        ObservationGraphics.display(self.env.observation_type, self.sim_surface)
+
+        # overlay information
+        if render_infos:
+            self.render_info_overlay(render_infos=render_infos)
 
         if not self.offscreen:
             self.screen.blit(self.sim_surface, (0, 0))

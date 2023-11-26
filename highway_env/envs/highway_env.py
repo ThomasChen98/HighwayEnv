@@ -1,6 +1,8 @@
-from typing import Dict, Text
+from typing import Dict, Text, List, Tuple, Optional, Callable
 
 import numpy as np
+from highway_env.envs.common.graphics import EnvViewer
+import gymnasium as gym
 
 from highway_env import utils
 from highway_env.envs.common.abstract import AbstractEnv
@@ -20,7 +22,10 @@ class HighwayEnv(AbstractEnv):
     The vehicle is driving on a straight highway with several lanes, and is rewarded for reaching a high speed,
     staying on the rightmost lanes and avoiding collisions.
     """
-
+    def __init__(self, config: dict = None, render_mode: Optional[str] = None) -> None:
+        super().__init__(config=config, render_mode=render_mode)
+        self.policy = 'Prior'
+    
     @classmethod
     def default_config(cls) -> dict:
         config = super().default_config()
@@ -119,7 +124,53 @@ class HighwayEnv(AbstractEnv):
     def _is_truncated(self) -> bool:
         """The episode is truncated if the time limit is reached."""
         return self.time >= self.config["duration"]
+    
+    def render(self, policy: str='Prior', render_infos: dict = {}) -> Optional[np.ndarray]:
+        """
+        Custom rendering for human interaction.
+        """
+        self.render_infos = render_infos
 
+        if self.render_mode is None:
+            assert self.spec is not None
+            gym.logger.warn(
+                "You are calling render method without specifying any render mode. "
+                "You can specify the render_mode at initialization, "
+                f'e.g. gym.make("{self.spec.id}", render_mode="rgb_array")'
+            )
+            return
+
+        if self.viewer is None:
+            self.viewer = EnvViewer(self, policy=policy)
+
+        if self.policy != policy:
+            self.policy = policy
+            print(f"=== Switch to {policy} render ===")
+            self.viewer.set_policy(policy)
+
+        self.enable_auto_render = True
+
+        self.viewer.display_info(render_infos=render_infos)
+
+        if not self.viewer.offscreen:
+            self.viewer.handle_events()
+        if self.render_mode == 'rgb_array':
+            image = self.viewer.get_image()
+            return image
+
+    def _automatic_rendering(self) -> None:
+        """
+        Automatically render the intermediate frames while an action is still ongoing.
+
+        This allows to render the whole video and not only single steps corresponding to agent decision-making.
+        If a RecordVideo wrapper has been set, use it to capture intermediate frames.
+        """
+        if self.viewer is not None and self.enable_auto_render:
+
+            if self._record_video_wrapper and self._record_video_wrapper.video_recorder:
+                self._record_video_wrapper.video_recorder.capture_frame()
+            else:
+                self.render(self.policy, render_infos=self.render_infos)
 
 class HighwayEnvFast(HighwayEnv):
     """

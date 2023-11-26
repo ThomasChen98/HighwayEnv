@@ -26,6 +26,7 @@ class VehicleGraphics(object):
 
     @classmethod
     def display(cls, vehicle: Vehicle, surface: "WorldSurface",
+                policy: str,
                 transparent: bool = False,
                 offscreen: bool = False,
                 label: bool = False,
@@ -65,7 +66,7 @@ class VehicleGraphics(object):
                                 surface.pix(length / 2 + (0.6*v.WIDTH) / 5),
                                 surface.pix(headlight_length),
                                 surface.pix(headlight_width))
-        color = cls.get_color(v, transparent)
+        color = cls.get_color(v, policy, transparent)
         pygame.draw.rect(vehicle_surface, color, rect, 0)
         pygame.draw.rect(vehicle_surface, cls.lighten(color), rect_headlight_left, 0)
         pygame.draw.rect(vehicle_surface, cls.lighten(color), rect_headlight_right, 0)
@@ -166,7 +167,7 @@ class VehicleGraphics(object):
             cls.display(v, surface, transparent=True, offscreen=offscreen)
 
     @classmethod
-    def get_color(cls, vehicle: Vehicle, transparent: bool = False) -> Tuple[int]:
+    def get_color(cls, vehicle: Vehicle, policy: str, transparent: bool = False) -> Tuple[int]:
         color = cls.DEFAULT_COLOR
         if getattr(vehicle, "color", None):
             color = vehicle.color
@@ -178,6 +179,8 @@ class VehicleGraphics(object):
             color = cls.BLUE
         elif isinstance(vehicle, MDPVehicle):
             color = cls.EGO_COLOR
+            if policy == 'Expert' or policy == 'Human':
+                color = cls.YELLOW
         if transparent:
             color = (color[0], color[1], color[2], 30)
         return color
