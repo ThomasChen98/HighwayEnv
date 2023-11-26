@@ -67,6 +67,7 @@ class AbstractEnv(gym.Env):
         assert render_mode is None or render_mode in self.metadata["render_modes"]
         self.render_mode = render_mode
         self.enable_auto_render = False
+        self.policy = ''
 
         self.reset()
 
