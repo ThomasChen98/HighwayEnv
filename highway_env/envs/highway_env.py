@@ -200,10 +200,7 @@ class HighwayEnvFast(HighwayEnv):
 
 class HighwayEnvBasic(HighwayEnv):
     """
-    A variant of highway-v0 with faster execution:
-        - lower simulation frequency
-        - fewer vehicles in the scene (and fewer lanes, shorter episode duration)
-        - only check collision of controlled vehicles with others
+    Basic highway environment for prior policy training
     """
     @classmethod
     def default_config(cls) -> dict:
@@ -244,10 +241,7 @@ class HighwayEnvBasic(HighwayEnv):
 
 class HighwayEnvAddRightReward(HighwayEnv):
     """
-    A variant of highway-v0 with faster execution:
-        - lower simulation frequency
-        - fewer vehicles in the scene (and fewer lanes, shorter episode duration)
-        - only check collision of controlled vehicles with others
+    Basic highway environment with additional right lane reward for expert policy training
     """
     @classmethod
     def default_config(cls) -> dict:
@@ -299,10 +293,7 @@ class HighwayEnvAddRightReward(HighwayEnv):
 
 class HighwayEnvPureRightReward(HighwayEnv):
     """
-    A variant of highway-v0 with faster execution:
-        - lower simulation frequency
-        - fewer vehicles in the scene (and fewer lanes, shorter episode duration)
-        - only check collision of controlled vehicles with others
+    highway environment with pure rightlane reward
     """
     @classmethod
     def default_config(cls) -> dict:
@@ -344,10 +335,7 @@ class HighwayEnvPureRightReward(HighwayEnv):
 
 class HighwayEnvMEAddLinearReward(HighwayEnv):
     """
-    A variant of highway-v0 with faster execution:
-        - lower simulation frequency
-        - fewer vehicles in the scene (and fewer lanes, shorter episode duration)
-        - only check collision of controlled vehicles with others
+    Basic highway environment with linear add-on reward weighted by theta for Residual Q-learning
     """
     def __init__(self, config: dict = None, theta=[0., 0., 0.]) -> None:
         super().__init__()
